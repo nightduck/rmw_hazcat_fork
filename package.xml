@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format2.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="2">
-  <name>rmw_iceoryx_cpp</name>
+  <name>rmw_hazcat_cpp</name>
   <version>1.0.1</version>
   <description>rmw implementation for Bosch's zero copy middleware iceoryx</description>
   <maintainer email="karsten.knese@us.bosch.com">Karsten Knese</maintainer>
