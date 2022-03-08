@@ -3,10 +3,32 @@
 template<class T, size_t POOL_SIZE> 
 class StaticPoolAllocator : public HMAAllocator<CPU_Mem> {
 public:
-    StaticPoolAllocator() {
+    StaticPoolAllocator(int id) {
+        shmem_id = id;
+        dealloc_fn = &this->static_deallocate<StaticPoolAllocator<T, POOL_SIZE>>;
+        remap_fn = &this->remap_shared_alloc_and_pool;
+
         forward_it = 0;
         rear_it = -1;
-        dealloc_fn = &this->static_deallocate;
+    }
+
+    ~StaticPoolAllocator(int id) {
+        struct shmid_ds buf;
+        if(shmctl(shmem_id, IPC_STAT, &buf) == -1) {
+            RMW_SET_ERROR_MSG("Error reading info about shared StaticPoolAllocator")
+        }
+
+        if(buf.shm_cpid == getpid()) {
+            if(shmctl(shmem_id, IPC_RMID, NULL) == -1) {
+                RMW_SET_ERROR_MSG("can't mark shared StaticPoolAllocator for deletion");
+                return RMW_RET_ERROR;
+            }
+        }
+        shmdt(this);
+    }
+
+    static void * remap_shared_alloc_and_pool(StaticPoolAllocator<T, POOL_SIZE> * alloc) {
+        return alloc;
     }
 
     // TODO: Reconsider starting conditions of iterators being -1 and 0
@@ -19,10 +41,6 @@ public:
             forward_it = next;
             return &pool[next] - this;  // Give address relative to shared object
         }
-    }
-
-    static void static_deallocate(StaticPoolAllocator * alloc, void * ptr) {
-        alloc->deallocate(ptr);
     }
 
 private:
@@ -39,14 +57,6 @@ private:
             rear_it = index;
             return;
         }
-    }
-
-
-    void * copy_from(void * ptr, int size) {
-        return ptr;
-    }
-    void * copy_from(void * ptr, int size) {
-        return ptr;
     }
 
     int forward_it;
