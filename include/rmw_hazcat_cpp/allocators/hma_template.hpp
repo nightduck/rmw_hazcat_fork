@@ -1,10 +1,12 @@
+#include <type_traits>
 #include <sys/shm.h>
 #include <unistd.h>
+#include <new>
 
 #define MAX_POOL_SIZE   0x100000000
 
-typedef CPU_Mem;
-typedef CUDA_Mem;
+enum class CPU_Mem;
+enum class CUDA_Mem;
 
 template<typename MemoryDomain>
 class HMAAllocator {
@@ -29,40 +31,43 @@ public:
     // to it. The relative positioning of the allocator and it's memory pool must be guaranteed
     // to be consistant in every process. If remapping occurs, alloc must be detached before
     // returning. No cleanup needed on part of caller
-    template<class AllocT>
-    virtual static void * remap_shared_alloc_and_pool(AllocT * alloc);
+    static void remap_shared_alloc_and_pool(HMAAllocator * alloc) {
+        return;   // In this sample, there's no pool, so we passthrough with no remapping
+    }
     
     virtual void * allocate(size_t size);
 
     // Static wrapper for deallocate
-    template<class AllocT>
-    typename std::enable_if<std::is_base_of<HMAAllocator, AllocT>::value>::type
-    static void static_deallocate(AllocT * alloc, void * ptr) {
+    static void static_deallocate(HMAAllocator * alloc, void * ptr) {
         return alloc->deallocate(ptr);
     }
 
     // Takes same arguments as constructor (except id at beginning), allocates shared memory that
     // may be used by constructor with placement new
-    template<typename AllocT, typename... Args>
+    template<class AllocT, typename... Args>
     static AllocT * create_shared_alloc(Args... args) {
+        static_assert(std::is_base_of<HMAAllocator, AllocT>::value, "AllocT not derived from HMAAllocator");
 
         // Create shared memory block
-        int id = shmget(IPC_PRIVATE, sizeof(AllocT), 0640)
-        if (id == (void*) -1) {
+        int id = shmget(IPC_PRIVATE, sizeof(AllocT), 0640);
+        if (id == -1) {
             // TODO: More robust error checking
             return NULL;
         }
 
         // Construct allocator in shared memory, and allocate (but don't map) optional memory pool
         void * ptr = shmat(id, NULL, 0);
-        AllocT * alloc = new(ptr) AllocT(id, args);
+        AllocT * alloc = new (ptr) AllocT(id, args...);
 
         // TODO: shmctl to set permissions and such
 
         // Optionally create a pool in host or device memory, and remap self and pool to be
         // adjacent in virtual memory
-        return remap_shared_alloc_and_pool(alloc);
+        AllocT::remap_shared_alloc_and_pool(alloc);
+        return alloc;
     }
+
+
 
     // Map in a shared allocator, then let it reserve itself a memory pool and remap itself
     // to be adjacent to that
@@ -73,17 +78,16 @@ public:
 
     template<typename T>
     void * convert(void* ptr, int size, HMAAllocator<T> * alloc) {
-        if (std::is_equal<MemoryDomain, T>) {
+        if (std::is_same<MemoryDomain, T>::value) {
             // Zero copy condition
-            src = dest;
-            return;
+            return ptr;
         } else {
             // If not present in this domain, see if the necessary copy is CPU-to-other,
             // other-to-CPU or other-to-other.
             void * here = this->allocate(size);
-            if (std::is_equal<CPU_Mem, T>) {
+            if (std::is_same<CPU_Mem, T>::value) {
                 this->copy_to(here, ptr, size);
-            } else if (std::is_equal<MemoryDomain, CPU_Mem>) {
+            } else if (std::is_same<MemoryDomain, CPU_Mem>::value) {
                 alloc->copy_from(ptr, here, size);
             } else {
                 copy(here, ptr, size, alloc);
@@ -115,12 +119,23 @@ protected:
     }
 };
 
-// These will never get called for a CPU based allocator, but predefine them anyways
-class HMAAllocator<CPU_Mem> {
-    void copy_from(void * here, void * there, int size) {
-        there = here;
-    }
-    void * copy_to(void * here, void * there, int size) {
-        here = there;
-    }
-};
+
+// using HMAAllocator<CPU_Mem>::create_shared_alloc<;
+
+// // // These will never get called for a CPU based allocator, but predefine them anyways
+// // class HMAAllocator<CPU_Mem> {
+// // public:
+// //     virtual void * allocate(size_t size);
+
+
+// // private:
+// //     virtual void deallocate(void * ptr);
+
+// //     // These will never get called
+// //     void copy_from(void * here, void * there, int size) {
+// //         there = here;
+// //     }
+// //     void copy_to(void * here, void * there, int size) {
+// //         here = there;
+// //     }
+// // };
