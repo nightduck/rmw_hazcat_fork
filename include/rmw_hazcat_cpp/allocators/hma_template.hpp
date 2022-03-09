@@ -31,49 +31,13 @@ public:
     // to it. The relative positioning of the allocator and it's memory pool must be guaranteed
     // to be consistant in every process. If remapping occurs, alloc must be detached before
     // returning. No cleanup needed on part of caller
-    static void remap_shared_alloc_and_pool(HMAAllocator * alloc) {
-        return;   // In this sample, there's no pool, so we passthrough with no remapping
-    }
+    virtual void * remap_shared_alloc_and_pool() = 0;
     
-    virtual void * allocate(size_t size);
+    virtual void * allocate(size_t size) = 0;
 
-    // Static wrapper for deallocate
+    // Static wrapper for deallocate.
     static void static_deallocate(HMAAllocator * alloc, void * ptr) {
         return alloc->deallocate(ptr);
-    }
-
-    // Takes same arguments as constructor (except id at beginning), allocates shared memory that
-    // may be used by constructor with placement new
-    template<class AllocT, typename... Args>
-    static AllocT * create_shared_alloc(Args... args) {
-        static_assert(std::is_base_of<HMAAllocator, AllocT>::value, "AllocT not derived from HMAAllocator");
-
-        // Create shared memory block
-        int id = shmget(IPC_PRIVATE, sizeof(AllocT), 0640);
-        if (id == -1) {
-            // TODO: More robust error checking
-            return NULL;
-        }
-
-        // Construct allocator in shared memory, and allocate (but don't map) optional memory pool
-        void * ptr = shmat(id, NULL, 0);
-        AllocT * alloc = new (ptr) AllocT(id, args...);
-
-        // TODO: shmctl to set permissions and such
-
-        // Optionally create a pool in host or device memory, and remap self and pool to be
-        // adjacent in virtual memory
-        AllocT::remap_shared_alloc_and_pool(alloc);
-        return alloc;
-    }
-
-
-
-    // Map in a shared allocator, then let it reserve itself a memory pool and remap itself
-    // to be adjacent to that
-    static void * map_shared_alloc(int shm_id) {
-        void * addr = shmat(shm_id, NULL, 0);
-        return ((HMAAllocator*)addr)->remap_fn(addr);
     }
 
     template<typename T>
@@ -98,16 +62,16 @@ public:
 
 protected:
     int shmem_id;
-    void (*dealloc_fn)(void*,void*);    // Set to static_deallocate
-    void (*remap_fn)(void*);            // Set to remap_shared_alloc_and_pool
+    void (*dealloc_fn)(HMAAllocator*,void*);    // Set to static_deallocate
+    void* (*remap_fn)(void*);                   // Set to static_remap in AllocatorFactory
 
-    virtual void deallocate(void * ptr);
+    virtual void deallocate(void * ptr) = 0;
 
     // Copy from self to main memory
-    virtual void copy_from(void * here, void * there, int size);
+    virtual void copy_from(void * here, void * there, int size) = 0;
 
     // Copy to self from many memory
-    virtual void copy_to(void * here, void * there, int size);
+    virtual void copy_to(void * here, void * there, int size) = 0;
     
     // Default copy operation between to non-CPU domains, using (dynamically alloc'ed) CPU as
     // intermediary. Can override with type-specific implementations to bypass main memory
@@ -120,22 +84,62 @@ protected:
 };
 
 
+// Used for static functions that can't go in HMAAllocator because typing reasons
+template<class AllocT>
+class AllocatorFactory {
+public:
+    // Takes same arguments as constructor (except id at beginning), allocates shared memory that
+    // may be used by constructor with placement new
+    template<typename... Args>
+    static AllocT *  create_shared_alloc(Args... args) {
+        //static_assert(std::is_base_of<HMAAllocator, AllocT>::value, "AllocT not derived from HMAAllocator");
+
+        // Create shared memory block
+        int id = shmget(IPC_PRIVATE, sizeof(AllocT), 0640);
+        if (id == -1) {
+            // TODO: More robust error checking
+            return NULL;
+        }
+
+        // Construct allocator in shared memory, and allocate (but don't map) optional memory pool
+        void * ptr = shmat(id, NULL, 0);
+        AllocT * alloc = new (ptr) AllocT(id, args...);
+
+        // TODO: shmctl to set permissions and such
+
+        // Optionally create a pool in host or device memory, and remap self and pool to be
+        // adjacent in virtual memory
+        return (AllocT*)alloc->remap_shared_alloc_and_pool();
+    }
+
+    // Map in a shared allocator, then let it reserve itself a memory pool and remap itself
+    // to be adjacent to that
+    static void * map_shared_alloc(int shm_id) {
+        AllocT * addr = shmat(shm_id, NULL, 0);
+        return addr->remap_shared_alloc_and_pool();
+    }
+
+    static void * static_remap(void * alloc) {
+        return ((AllocT*)alloc)->remap_shared_alloc_and_pool();
+    }
+};
+
+
 // using HMAAllocator<CPU_Mem>::create_shared_alloc<;
 
-// // // These will never get called for a CPU based allocator, but predefine them anyways
-// // class HMAAllocator<CPU_Mem> {
-// // public:
-// //     virtual void * allocate(size_t size);
+// // These will never get called for a CPU based allocator, but predefine them anyways
+// class HMAAllocator<CPU_Mem> {
+// public:
+//     virtual void * allocate(size_t size);
 
+// private:
+//     virtual void deallocate(void * ptr);
 
-// // private:
-// //     virtual void deallocate(void * ptr);
-
-// //     // These will never get called
-// //     void copy_from(void * here, void * there, int size) {
-// //         there = here;
-// //     }
-// //     void copy_to(void * here, void * there, int size) {
-// //         here = there;
-// //     }
-// // };
+//     // These will never get called
+//     void copy_from(void * here, void * there, int size) {
+//         there = here;
+//     }
+//     void copy_to(void * here, void * there, int size) {
+//         here = there;
+//     }
+// };

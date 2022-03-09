@@ -1,12 +1,13 @@
 #include "hma_template.hpp"
 
 template<class T, size_t POOL_SIZE> 
-class StaticPoolAllocator : public HMAAllocator<CPU_Mem> {
+class StaticPoolAllocator : public AllocatorFactory<StaticPoolAllocator<T, POOL_SIZE>>,
+                            public HMAAllocator<CPU_Mem> {
 public:
     StaticPoolAllocator(int id) {
         shmem_id = id;
         dealloc_fn = &StaticPoolAllocator::static_deallocate;
-        remap_fn = &StaticPoolAllocator::remap_shared_alloc_and_pool;
+        remap_fn = &StaticPoolAllocator::static_remap;
         forward_it = 0;
         rear_it = -1;
     }
@@ -29,17 +30,13 @@ public:
         shmdt(this);
     }
 
-    static void static_deallocate(void * alloc, void * ptr) {
-        return ((StaticPoolAllocator<T, POOL_SIZE>*)alloc)->deallocate(ptr);
-    }
-
-    static void remap_shared_alloc_and_pool(void * alloc) {
-        return;
+    void * remap_shared_alloc_and_pool() override {
+        return this;
     }
 
     // TODO: Reconsider starting conditions of iterators being -1 and 0
     // Allocates a chunk of memory. Argument is a syntactic formality, will be ignored
-    void * allocate(size_t size = sizeof(T)) override {
+    void * allocate(size_t size = sizeof(T)) {
         int next = (forward_it + 1 >= size) ? 0 : forward_it + 1;
         if (next == rear_it) {
             return NULL;
@@ -51,7 +48,7 @@ public:
         }
     }
 
-private:
+protected:
     // TODO: Reconsider starting conditions of iterators being -1 and 0
     void deallocate(void * ptr) override {
         int index = ((intptr_t)ptr - (intptr_t)pool) / sizeof(T);
@@ -67,6 +64,7 @@ private:
         }
     }
 
+private:
     // These will never get called
     void copy_from(void * here, void * there, int size) override {
         there = here;
