@@ -66,6 +66,8 @@ int main(int argc, char ** argv) {
     //static_deallocate<AllocT>(cpu_alloc, copy);
     AllocT::static_deallocate(cpu_alloc, copy);
 
+    UnknownAllocator * uk = (UnknownAllocator*)cpu_alloc;
+    uk = UnknownAllocator::map_shared_alloc(cpu_alloc->get_id());
 
     cpu_alloc->~StaticPoolAllocator();
 

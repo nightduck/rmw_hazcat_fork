@@ -29,8 +29,8 @@ public:
 
     // Reserve address space for optional memory pool and then map self to be just prior
     // to it. The relative positioning of the allocator and it's memory pool must be guaranteed
-    // to be consistant in every process. If remapping occurs, alloc must be detached before
-    // returning. No cleanup needed on part of caller
+    // to be consistant in every process that calls this. If remapping occurs, alloc must be
+    // detached before returning. No cleanup needed on part of caller
     virtual void * remap_shared_alloc_and_pool() = 0;
     
     virtual void * allocate(size_t size) = 0;
@@ -60,10 +60,13 @@ public:
         }
     }
 
+    int get_id() {
+        return shmem_id;
+    }
+
 protected:
     int shmem_id;
     void (*dealloc_fn)(HMAAllocator*,void*);    // Set to static_deallocate
-    void* (*remap_fn)(void*);                   // Set to static_remap in AllocatorFactory
 
     virtual void deallocate(void * ptr) = 0;
 
@@ -112,15 +115,28 @@ public:
         return (AllocT*)alloc->remap_shared_alloc_and_pool();
     }
 
-    // Map in a shared allocator, then let it reserve itself a memory pool and remap itself
-    // to be adjacent to that
-    static void * map_shared_alloc(int shm_id) {
-        AllocT * addr = shmat(shm_id, NULL, 0);
-        return addr->remap_shared_alloc_and_pool();
-    }
-
     static void * static_remap(void * alloc) {
         return ((AllocT*)alloc)->remap_shared_alloc_and_pool();
+    }
+
+protected:
+    void* (*remap_fn)(void*);                   // Set to static_remap in AllocatorFactory
+};
+
+class UnknownAllocator : protected HMAAllocator<void>,
+                         protected AllocatorFactory<UnknownAllocator> {
+public:
+    void dealloc(void * ptr) {
+        dealloc_fn(this, ptr);
+    }
+
+    // Map in a shared allocator, then let it reserve itself a memory pool and remap itself
+    // to be adjacent to that.
+    // Weirdly, this is a static function, calling a non-static member, which is just a static
+    // wrapper for a non-static function.
+    static UnknownAllocator * map_shared_alloc(int shm_id) {
+        UnknownAllocator * addr = (UnknownAllocator*)shmat(shm_id, NULL, 0);
+        return (UnknownAllocator*)addr->remap_fn(addr);
     }
 };
 

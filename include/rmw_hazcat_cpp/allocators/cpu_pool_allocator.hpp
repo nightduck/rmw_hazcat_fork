@@ -1,13 +1,13 @@
 #include "hma_template.hpp"
 
 template<class T, size_t POOL_SIZE> 
-class StaticPoolAllocator : public AllocatorFactory<StaticPoolAllocator<T, POOL_SIZE>>,
-                            public HMAAllocator<CPU_Mem> {
+class StaticPoolAllocator : public HMAAllocator<CPU_Mem>,
+                            public AllocatorFactory<StaticPoolAllocator<T, POOL_SIZE>> {
 public:
     StaticPoolAllocator(int id) {
         shmem_id = id;
-        dealloc_fn = &StaticPoolAllocator::static_deallocate;
-        remap_fn = &StaticPoolAllocator::static_remap;
+        this->dealloc_fn = &StaticPoolAllocator::static_deallocate;
+        this->remap_fn = &StaticPoolAllocator::static_remap;
         forward_it = 0;
         rear_it = -1;
     }
