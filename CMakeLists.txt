@@ -134,35 +134,26 @@ install(
 )
 
 # install(
-#   TARGETS rmw_iceoryx_serialization rmw_iceoryx_name_conversion rmw_iceoryx_cpp
+#   TARGETS rmw_hazcat_cpp
 #   ARCHIVE DESTINATION lib
 #   LIBRARY DESTINATION lib
 #   RUNTIME DESTINATION bin
 # )
 
-# if(BUILD_TESTING)
-#   find_package(ament_lint_auto REQUIRED)
-#   ament_lint_auto_find_test_dependencies()
+if(BUILD_TESTING)
+  find_package(ament_lint_auto REQUIRED)
+  ament_lint_auto_find_test_dependencies()
 
-#   find_package(ament_cmake_gtest REQUIRED)
-#   find_package(test_msgs REQUIRED)
+  find_package(ament_cmake_gtest REQUIRED)
+  find_package(test_msgs REQUIRED)
 
-#   ament_add_gtest(test_name_conversion test/iceoryx_name_conversion_test.cpp)
-#   target_link_libraries(test_name_conversion ${PROJECT_NAME})
-
-#   ament_add_gtest(test_message_serialization test/iceoryx_serialization_test.cpp)
-#   target_link_libraries(test_message_serialization ${PROJECT_NAME})
-#   ament_target_dependencies(test_message_serialization
-#     test_msgs
-#   )
-
-#   ament_add_gtest(test_fixed_size_messages test/iceoryx_fixed_size_messages_test.cpp)
-#   target_link_libraries(test_fixed_size_messages ${PROJECT_NAME})
-#   ament_target_dependencies(test_fixed_size_messages
-#     test_msgs
-#   )
-# endif()
+  ament_add_gtest(allocator_test test/hazcat_allocator_test.cpp)
+  #target_link_libraries(allocator_test ${PROJECT_NAME})
+  ament_target_dependencies(allocator_test
+    test_msgs
+  )
+endif()
 
 ament_export_include_directories(include)
-ament_export_libraries(rmw_iceoryx_serialization rmw_iceoryx_name_conversion rmw_iceoryx_cpp)
+#ament_export_libraries(rmw_hazcat_cpp)
 ament_package()

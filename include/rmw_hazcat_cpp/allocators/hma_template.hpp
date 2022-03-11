@@ -1,7 +1,13 @@
 #include <type_traits>
 #include <sys/shm.h>
+#include <cstdlib>
+#include <cstdint>
 #include <unistd.h>
+#include <iostream>
 #include <new>
+
+#define OFFSET_TO_PTR(a, o) (uint8_t*)a + o
+#define PTR_TO_OFFSET(a, p) (uint8_t*)p - (uint8_t*)a
 
 #define MAX_POOL_SIZE   0x100000000
 
@@ -33,11 +39,13 @@ public:
     // detached before returning. No cleanup needed on part of caller
     virtual void * remap_shared_alloc_and_pool() = 0;
     
-    virtual void * allocate(size_t size) = 0;
+
+    // Returns offset, which is measured relative to allocator. Compute this + offset to get pointer
+    virtual int allocate(size_t size) = 0;
 
     // Static wrapper for deallocate.
-    static void static_deallocate(HMAAllocator * alloc, void * ptr) {
-        return alloc->deallocate(ptr);
+    static void static_deallocate(HMAAllocator * alloc, int offset) {
+        return alloc->deallocate(offset);
     }
 
     template<typename T>
@@ -48,7 +56,7 @@ public:
         } else {
             // If not present in this domain, see if the necessary copy is CPU-to-other,
             // other-to-CPU or other-to-other.
-            void * here = this->allocate(size);
+            void * here = OFFSET_TO_PTR(this, this->allocate(size));
             if (std::is_same<CPU_Mem, T>::value) {
                 this->copy_to(here, ptr, size);
             } else if (std::is_same<MemoryDomain, CPU_Mem>::value) {
@@ -66,9 +74,10 @@ public:
 
 protected:
     int shmem_id;
-    void (*dealloc_fn)(HMAAllocator*,void*);    // Set to static_deallocate
+    void (*dealloc_fn)(HMAAllocator*,int);    // Set to static_deallocate
 
-    virtual void deallocate(void * ptr) = 0;
+    // Offset is measured relative to allocator. Compute this + offset to get pointer to message
+    virtual void deallocate(int offset) = 0;
 
     // Copy from self to main memory
     virtual void copy_from(void * here, void * there, int size) = 0;
@@ -101,12 +110,16 @@ public:
         int id = shmget(IPC_PRIVATE, sizeof(AllocT), 0640);
         if (id == -1) {
             // TODO: More robust error checking
-            return NULL;
+            return nullptr;
         }
+
+        std::cout << "Allocator id: " << id << std::endl;
 
         // Construct allocator in shared memory, and allocate (but don't map) optional memory pool
         void * ptr = shmat(id, NULL, 0);
         AllocT * alloc = new (ptr) AllocT(id, args...);
+
+        std::cout << "Mounted alloc at: " << alloc << std::endl;
 
         // TODO: shmctl to set permissions and such
 
@@ -126,8 +139,8 @@ protected:
 class UnknownAllocator : protected HMAAllocator<void>,
                          protected AllocatorFactory<UnknownAllocator> {
 public:
-    void dealloc(void * ptr) {
-        dealloc_fn(this, ptr);
+    void dealloc(int offset) {
+        dealloc_fn(this, offset);
     }
 
     // Map in a shared allocator, then let it reserve itself a memory pool and remap itself

@@ -2,6 +2,7 @@
 #include <cuda.h>
 #include "rmw_hazcat_cpp/allocators/cpu_pool_allocator.hpp"
 #include <iostream>
+#include <cassert>
 
 template<typename T>
 class BaseClass {
@@ -51,31 +52,24 @@ public:
 using AllocT = StaticPoolAllocator<long, 30>;
 
 int main(int argc, char ** argv) {
-    AllocT * cpu_alloc;
-    void * ptr;
+    AllocT * cpu_alloc = AllocT::create_shared_alloc();
 
-    // DerivedClass c = DerivedClass(4);
-    // DerivedClass::static_fn(3);
+    assert(sizeof(int) == 4UL);
+    assert(sizeof(long) == 8UL);
+    assert(sizeof(void(*)(void*)) == 8UL);
 
+    assert(cpu_alloc != nullptr);
+    //TODO: Something with checking the shmem_id. EXPECT_EQ(((int*)cpu_alloc))
 
-    cpu_alloc = AllocT::create_shared_alloc();
+    uint8_t* ptr = (uint8_t*)cpu_alloc;
+    int id = cpu_alloc->get_id();
+    // assert(*(uint64_t*)(ptr+4) == (uint64_t)&AllocT::static_deallocate);
+    // assert(*(uint64_t*)(ptr+12) == (uint64_t)&AllocT::static_remap);
 
-    cpu_alloc->allocate();
-    ptr = malloc(sizeof(long));
-    void * copy = cpu_alloc->convert(ptr, sizeof(long), cpu_alloc);
-    //static_deallocate<AllocT>(cpu_alloc, copy);
-    AllocT::static_deallocate(cpu_alloc, copy);
-
-    UnknownAllocator * uk = (UnknownAllocator*)cpu_alloc;
-    uk = UnknownAllocator::map_shared_alloc(cpu_alloc->get_id());
-
+    std::cout << "Pre destruction, ID is : " << cpu_alloc->get_id() << std::endl;
     cpu_alloc->~StaticPoolAllocator();
-
-    //cpu_alloc = HMAAllocator<CPU_Mem>::create_shared_alloc<AllocT>();
-
-    //cpu_alloc = AllocT::create_shared_alloc<AllocT>(64);
-
-    //FakeClass * fake = HMAAllocator<CPU_Mem>::create_shared_alloc<FakeClass>();
+    std::cout << "Destructed" << std::endl;
+    std::cout << "Post destruction, ID is : " << cpu_alloc->get_id() << std::endl;
 
 
     return 0;
