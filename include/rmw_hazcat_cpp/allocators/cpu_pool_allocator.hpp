@@ -9,8 +9,8 @@ public:
         shmem_id = id;
         this->dealloc_fn = &StaticPoolAllocator::static_deallocate;
         this->remap_fn = &StaticPoolAllocator::static_remap;
-        forward_it = 0;
-        rear_it = -1;
+        count = 0;
+        rear_it = 0;
     }
 
     ~StaticPoolAllocator() {
@@ -42,51 +42,43 @@ public:
 
     // Allocates a chunk of memory. Argument is a syntactic formality, will be ignored
     int allocate(size_t size = 0) {
-        if (forward_it == rear_it) {
+        if (count == POOL_SIZE) {
             // Allocator full
-            return NULL;
+            return -1;
         } else {
-            // Give address relative to shared object
-            int ret = PTR_TO_OFFSET(this, forward_it);
+            int forward_it = (rear_it + count) % POOL_SIZE;
 
-            // Update forward iterator to point to next empty spo
-            forward_it++;
-            if(forward_it > POOL_SIZE) {
-                forward_it = 0;
-            }
+            // Give address relative to shared object
+            int ret = PTR_TO_OFFSET(this, &pool[forward_it]);
+
+            // Update count of how many elements in pool
+            count++;
 
             return ret;
         }
     }
 
 protected:
-    // TODO: Reconsider starting conditions of iterators being -1 and 0
+    // Integer should be offset to pool array
     void deallocate(int offset) override {
-        if (rear_it < 0) {
+        if (count == 0) {
             return; // Allocator empty, nothing to deallocate
         }
         int entry = (int)((uint8_t*)this + offset - (uint8_t*)pool) / sizeof(T);
 
-        if(entry == forward_it) {
-            // Dealloc'ed last entry. Allocator now empty
-            forward_it = 0;
-            rear_it = -1;
-        } else if (forward_it <= rear_it && rear_it <= entry) {
-            rear_it = entry;
-            return;
-        } else if (rear_it <= entry && entry <= forward_it) {
-            rear_it = entry;
-            return;
-        } else if (entry <= forward_it && forward_it <= rear_it) {
-            rear_it = entry;
-            return;
-        } else {
-            // Other conditions: f<e<r, e<r<f, and r<f<e all try to deallocate unallocated memory
-            return;
+        // Do math with imaginary overflow indices so forward_it >= entry >= rear_it
+        int forward_it = rear_it + count;
+        if (__glibc_unlikely(entry < rear_it)) {
+            entry += POOL_SIZE;
         }
+
+        // Most likely scenario: entry == rear_it as allocations are deallocated in order
+        rear_it = entry + 1;
+        count = forward_it - rear_it;
+
+        return;
     }
 
-private:
     // These will never get called
     void copy_from(void * here, void * there, int size) override {
         std::memcpy(there, here, size);
@@ -95,7 +87,7 @@ private:
         std::memcpy(here, there, size);
     }
 
-    int forward_it;
+    int count;
     int rear_it;
     T pool[POOL_SIZE];
 };
