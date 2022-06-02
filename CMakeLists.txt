@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
-project(rmw_hazcat_cpp)
+set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
+project(rmw_hazcat_cpp CUDA CXX)
 
 # Default to C99
 if(NOT CMAKE_C_STANDARD)
@@ -24,13 +25,14 @@ if(CODE_COVERAGE AND
 endif()
 
 # find dependencies
+find_package(CUDA REQUIRED)
 find_package(ament_cmake REQUIRED)
-find_package(iceoryx_posh QUIET)
-if(NOT iceoryx_posh_FOUND)
-  ament_package()
-  message(WARNING "iceoryx not found - skipping '${PROJECT_NAME}'")
-  return()
-endif()
+# find_package(iceoryx_posh QUIET)
+# if(NOT iceoryx_posh_FOUND)
+#   ament_package()
+#   message(WARNING "iceoryx not found - skipping '${PROJECT_NAME}'")
+#   return()
+# endif()
 find_package(rcpputils REQUIRED)
 find_package(rcutils REQUIRED)
 find_package(rmw REQUIRED)
@@ -39,6 +41,14 @@ find_package(rosidl_runtime_cpp REQUIRED)
 find_package(rosidl_typesupport_cpp REQUIRED)
 find_package(rosidl_typesupport_introspection_c REQUIRED)
 find_package(rosidl_typesupport_introspection_cpp REQUIRED)
+
+SET(CUDA_SEPARABLE_COMPILATION ON)
+CUDA_SELECT_NVCC_ARCH_FLAGS(ARCH_FLAGS Auto)
+SET(CUDA_NVCC_FLAGS ${ARCH_FLAGS} CACHE STRING "nvcc flags" FORCE)
+
+include_directories(include)
+
+include_directories(${CUDA_INCLUDE_DIRS})
 
 # add_library(rmw_iceoryx_serialization SHARED
 #   src/internal/iceoryx_deserialize.cpp
@@ -130,7 +140,7 @@ find_package(rosidl_typesupport_introspection_cpp REQUIRED)
 
 install(
   DIRECTORY include/
-  DESTINATION include
+  DESTINATION include/
 )
 
 # install(
@@ -146,14 +156,15 @@ if(BUILD_TESTING)
 
   find_package(ament_cmake_gtest REQUIRED)
   find_package(test_msgs REQUIRED)
+  find_package(std_msgs REQUIRED)
 
   ament_add_gtest(allocator_test test/hazcat_allocator_test.cpp)
-  #target_link_libraries(allocator_test ${PROJECT_NAME})
+  target_link_libraries(allocator_test cuda)
   ament_target_dependencies(allocator_test
-    test_msgs
+    CUDA test_msgs std_msgs
   )
 endif()
 
 ament_export_include_directories(include)
-#ament_export_libraries(rmw_hazcat_cpp)
+# ament_export_libraries(rmw_hazcat_cpp)
 ament_package()

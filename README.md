@@ -1,7 +1,9 @@
-RMW_ICEORYX_CPP
+RMW_HAZCAT_CPP
 ---------------
 
-C++ implementation of the rmw iceoryx middleware interface.
+C++ implementation of the rmw hazcat middleware interface.
+
+Based on iceoryx, so vestigial references may still be found
 
 ## test
 
@@ -13,3 +15,8 @@ ros2 run demo_nodes_cpp talker
 ros2 run demo_nodes_cpp listener
 iox-introspection-client --all
 ```
+
+Ctrl+Shift+B to build
+
+To test:
+colcon test --merge-install --packages-select rmw_hazcat_cpp
