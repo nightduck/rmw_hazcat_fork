@@ -17,6 +17,7 @@
 
 #include "rmw_hazcat_cpp/allocators/cpu_pool_allocator.hpp"
 #include "rmw_hazcat_cpp/allocators/cuda_pool_allocator.hpp"
+#include "rmw_hazcat_cpp/allocators/cpu_ringbuf_allocator.h"
 
 #include <gtest/gtest.h>
 
@@ -124,32 +125,32 @@ TEST(AllocatorTest, creation_test)
   EXPECT_EQ(errno, EINVAL);
 }
 
-TEST(AllocatorTest, gpu_creation_test)
-{
-  CHECK_DRV(cuInit(0));
+// TEST(AllocatorTest, gpu_creation_test)
+// {
+//   CHECK_DRV(cuInit(0));
 
-  using AllocT = StaticGPUPoolAllocator<test_msgs::msg::BasicTypes, 30>;
-  auto cpu_alloc = (TestGPUWrapper<test_msgs::msg::BasicTypes, 30> *) AllocT::create_shared_alloc();
+//   using AllocT = StaticGPUPoolAllocator<test_msgs::msg::BasicTypes, 30>;
+//   auto cpu_alloc = (TestGPUWrapper<test_msgs::msg::BasicTypes, 30> *) AllocT::create_shared_alloc();
 
-  // Verify numbers mean what they should
-  EXPECT_EQ(sizeof(int), 4UL);
-  EXPECT_EQ(sizeof(long), 8UL);
-  EXPECT_EQ(sizeof(void (*)(void *)), 8UL);
+//   // Verify numbers mean what they should
+//   EXPECT_EQ(sizeof(int), 4UL);
+//   EXPECT_EQ(sizeof(long), 8UL);
+//   EXPECT_EQ(sizeof(void (*)(void *)), 8UL);
 
-  // Verify alloc was created correctly
-  EXPECT_NE(cpu_alloc, nullptr);
+//   // Verify alloc was created correctly
+//   EXPECT_NE(cpu_alloc, nullptr);
 
-  // Verify function pointers are correct
-  int id = cpu_alloc->get_id();
-  EXPECT_TRUE(cpu_alloc->id_is(id));
-  EXPECT_TRUE(cpu_alloc->dealloc_is(AllocT::static_deallocate));
-  EXPECT_TRUE(cpu_alloc->remap_is(AllocT::static_remap));
+//   // Verify function pointers are correct
+//   int id = cpu_alloc->get_id();
+//   EXPECT_TRUE(cpu_alloc->id_is(id));
+//   EXPECT_TRUE(cpu_alloc->dealloc_is(AllocT::static_deallocate));
+//   EXPECT_TRUE(cpu_alloc->remap_is(AllocT::static_remap));
 
-  // Verify shared memory is destroyed correctly
-  ((AllocT *)cpu_alloc)->~StaticGPUPoolAllocator();
-  EXPECT_EQ(shmat(id, NULL, 0), (void *)-1);
-  EXPECT_EQ(errno, EINVAL);
-}
+//   // Verify shared memory is destroyed correctly
+//   ((AllocT *)cpu_alloc)->~StaticGPUPoolAllocator();
+//   EXPECT_EQ(shmat(id, NULL, 0), (void *)-1);
+//   EXPECT_EQ(errno, EINVAL);
+// }
 
 TEST(AllocatorTest, allocate_rw_test)
 {

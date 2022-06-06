@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
-project(rmw_hazcat_cpp CUDA CXX)
+project(rmw_hazcat_cpp CUDA CXX C)
 
 # Default to C99
 if(NOT CMAKE_C_STANDARD)
@@ -13,7 +13,7 @@ if(NOT CMAKE_CXX_STANDARD)
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
+  add_compile_options(-Wall -Wextra)
 endif()
 
 if(CODE_COVERAGE AND
@@ -138,17 +138,21 @@ include_directories(${CUDA_INCLUDE_DIRS})
 # )
 # configure_rmw_library(rmw_iceoryx_cpp)
 
+add_library(hazcat_allocators SHARED
+  src/allocators/hma_template.cpp
+)
+
 install(
   DIRECTORY include/
   DESTINATION include/
 )
 
-# install(
-#   TARGETS rmw_hazcat_cpp
-#   ARCHIVE DESTINATION lib
-#   LIBRARY DESTINATION lib
-#   RUNTIME DESTINATION bin
-# )
+install(
+  TARGETS hazcat_allocators
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -159,7 +163,7 @@ if(BUILD_TESTING)
   find_package(std_msgs REQUIRED)
 
   ament_add_gtest(allocator_test test/hazcat_allocator_test.cpp)
-  target_link_libraries(allocator_test cuda)
+  target_link_libraries(allocator_test cuda hazcat_allocators)
   ament_target_dependencies(allocator_test
     CUDA test_msgs std_msgs
   )

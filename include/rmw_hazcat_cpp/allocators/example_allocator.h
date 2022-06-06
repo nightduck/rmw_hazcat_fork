@@ -11,11 +11,11 @@ struct example_allocator {
   union {
     struct {
       // Exist in local memory, pointing to static functions
-      const int   (*allocate)   (void * self, size_t size);
-      const void  (*deallocate) (void * self, int offset);
-      const void  (*copy_from)  (void * here, void * there, size_t size);
-      const void  (*copy_to)    (void * here, void * there, size_t size);
-      const void  (*copy)       (void * here, void * there, size_t size, hma_allocator * dest_alloc);
+      int   (*const allocate)   (void * self, size_t size);
+      void  (*const deallocate) (void * self, int offset);
+      void  (*const copy_from)  (void * here, void * there, size_t size);
+      void  (*const copy_to)    (void * here, void * there, size_t size);
+      void  (*const copy)       (void * here, void * there, size_t size, hma_allocator * dest_alloc);
 
       // Exist in shared memory
       const int shmem_id;
